@@ -72,9 +72,9 @@ RF_MAX_DEPTH = 12
 XGB_ESTIMATORS = 300
 LGB_ESTIMATORS = 300
 
-os.makedirs("models_cross_dataset", exist_ok=True)
-os.makedirs("results_cross_dataset", exist_ok=True)
-os.makedirs("plots_cross_dataset", exist_ok=True)
+os.makedirs("models", exist_ok=True)
+os.makedirs("results", exist_ok=True)
+os.makedirs("plots", exist_ok=True)
 os.makedirs("data_external", exist_ok=True)
 
 # ══════════════════════════════════════════════════════════════════════════════
@@ -236,7 +236,7 @@ if os.path.exists(CACHE_FILE):
     X_test = d["X_test"]
     y_test = d["y_test"]
     test_city_labels = d["test_city_labels"]
-    feature_scaler = joblib.load("models_cross_dataset/feature_scaler.pkl")
+    feature_scaler = joblib.load("models/feature_scaler.pkl")
 else:
     print("\n--- Step 1: Loading Dataset 1 (Ground Station Training Data) ---", flush=True)
     df_train = load_train_dataset(CITIES)
@@ -253,7 +253,7 @@ else:
     feature_scaler = StandardScaler()
     df_train[FEATURES] = feature_scaler.fit_transform(df_train[FEATURES])
     df_test[FEATURES]  = feature_scaler.transform(df_test[FEATURES])
-    joblib.dump(feature_scaler, "models_cross_dataset/feature_scaler.pkl")
+    joblib.dump(feature_scaler, "models/feature_scaler.pkl")
 
     print("\n--- Step 3: Generating 24-hr Lagged Sequences ---", flush=True)
     X_train, y_train, train_city_labels = make_sequences(df_train, LOOKBACK, HORIZON)
@@ -440,31 +440,31 @@ print("[1/10] Training PyTorch LSTM ...", flush=True)
 m_lstm = train_torch_model(LSTMModel(n_features), X_tr, y_tr, X_val, y_val)
 preds_test["LSTM"] = predict_torch(m_lstm, X_test)
 preds_val["LSTM"]  = predict_torch(m_lstm, X_val)
-torch.save(m_lstm.state_dict(), "models_cross_dataset/lstm_pm25.pt")
+torch.save(m_lstm.state_dict(), "models/lstm_pm25.pt")
 
 print("[2/10] Training PyTorch GRU ...", flush=True)
 m_gru = train_torch_model(GRUModel(n_features), X_tr, y_tr, X_val, y_val)
 preds_test["GRU"] = predict_torch(m_gru, X_test)
 preds_val["GRU"]  = predict_torch(m_gru, X_val)
-torch.save(m_gru.state_dict(), "models_cross_dataset/gru_pm25.pt")
+torch.save(m_gru.state_dict(), "models/gru_pm25.pt")
 
 print("[3/10] Training PyTorch CNN-LSTM ...", flush=True)
 m_cnn = train_torch_model(CNNLSTMModel(n_features), X_tr, y_tr, X_val, y_val)
 preds_test["CNN-LSTM"] = predict_torch(m_cnn, X_test)
 preds_val["CNN-LSTM"]  = predict_torch(m_cnn, X_val)
-torch.save(m_cnn.state_dict(), "models_cross_dataset/cnn_lstm_pm25.pt")
+torch.save(m_cnn.state_dict(), "models/cnn_lstm_pm25.pt")
 
 print("[4/10] Training PyTorch BiLSTM ...", flush=True)
 m_bi = train_torch_model(BiLSTMModel(n_features), X_tr, y_tr, X_val, y_val)
 preds_test["BiLSTM"] = predict_torch(m_bi, X_test)
 preds_val["BiLSTM"]  = predict_torch(m_bi, X_val)
-torch.save(m_bi.state_dict(), "models_cross_dataset/bilstm_pm25.pt")
+torch.save(m_bi.state_dict(), "models/bilstm_pm25.pt")
 
 print("[5/10] Training PyTorch Stacked LSTM ...", flush=True)
 m_stk = train_torch_model(StackedLSTMModel(n_features), X_tr, y_tr, X_val, y_val)
 preds_test["Stacked LSTM"] = predict_torch(m_stk, X_test)
 preds_val["Stacked LSTM"]  = predict_torch(m_stk, X_val)
-torch.save(m_stk.state_dict(), "models_cross_dataset/stacked_lstm_pm25.pt")
+torch.save(m_stk.state_dict(), "models/stacked_lstm_pm25.pt")
 
 print("\n" + "="*70)
 print("🌲 TRAINING CLASSICAL ML & GRADIENT BOOSTED MODELS")
@@ -475,21 +475,21 @@ m_lr = LinearRegression()
 m_lr.fit(X_tr_flat, y_tr)
 preds_test["Linear Regression"] = m_lr.predict(X_test_flat)
 preds_val["Linear Regression"]  = m_lr.predict(X_val_flat)
-joblib.dump(m_lr, "models_cross_dataset/linear_regression.pkl")
+joblib.dump(m_lr, "models/linear_regression.pkl")
 
 print("[7/10] Training Ridge Regression ...", flush=True)
 m_ridge = Ridge(alpha=1.0)
 m_ridge.fit(X_tr_flat, y_tr)
 preds_test["Ridge Regression"] = m_ridge.predict(X_test_flat)
 preds_val["Ridge Regression"]  = m_ridge.predict(X_val_flat)
-joblib.dump(m_ridge, "models_cross_dataset/ridge_regression.pkl")
+joblib.dump(m_ridge, "models/ridge_regression.pkl")
 
 print("[8/10] Training Random Forest (30 trees, depth 12) ...", flush=True)
 m_rf = RandomForestRegressor(n_estimators=RF_ESTIMATORS, max_depth=RF_MAX_DEPTH, random_state=SEED, n_jobs=1)
 m_rf.fit(X_tr_flat, y_tr)
 preds_test["Random Forest"] = m_rf.predict(X_test_flat)
 preds_val["Random Forest"]  = m_rf.predict(X_val_flat)
-joblib.dump(m_rf, "models_cross_dataset/random_forest.pkl")
+joblib.dump(m_rf, "models/random_forest.pkl")
 
 print("[9/10] Training XGBoost (300 trees on GPU CUDA) ...", flush=True)
 m_xgb = XGBRegressor(n_estimators=XGB_ESTIMATORS, max_depth=8, learning_rate=0.05,
@@ -497,7 +497,7 @@ m_xgb = XGBRegressor(n_estimators=XGB_ESTIMATORS, max_depth=8, learning_rate=0.0
 m_xgb.fit(X_tr_flat, y_tr)
 preds_test["XGBoost"] = m_xgb.predict(X_test_flat)
 preds_val["XGBoost"]  = m_xgb.predict(X_val_flat)
-joblib.dump(m_xgb, "models_cross_dataset/xgboost.pkl")
+joblib.dump(m_xgb, "models/xgboost.pkl")
 
 print("[10/10] Training LightGBM (300 trees, 63 leaves) ...", flush=True)
 m_lgb = lgb.LGBMRegressor(n_estimators=LGB_ESTIMATORS, learning_rate=0.05, num_leaves=63,
@@ -505,7 +505,7 @@ m_lgb = lgb.LGBMRegressor(n_estimators=LGB_ESTIMATORS, learning_rate=0.05, num_l
 m_lgb.fit(X_tr_flat, y_tr)
 preds_test["LightGBM"] = m_lgb.predict(X_test_flat)
 preds_val["LightGBM"]  = m_lgb.predict(X_val_flat)
-joblib.dump(m_lgb, "models_cross_dataset/lightgbm.pkl")
+joblib.dump(m_lgb, "models/lightgbm.pkl")
 
 # ══════════════════════════════════════════════════════════════════════════════
 # HYBRID ENSEMBLES (COMBINING ML + DEEP LEARNING)
@@ -601,8 +601,8 @@ print("="*70)
 print(df_per_city.to_string(index=False))
 
 # Save results
-df_overall.to_csv("results_cross_dataset/overall_results.csv", index=False)
-df_per_city.to_csv("results_cross_dataset/per_city_results.csv", index=False)
+df_overall.to_csv("results/overall_results.csv", index=False)
+df_per_city.to_csv("results/per_city_results.csv", index=False)
 
 # Plots
 plt.figure(figsize=(16, 7))
@@ -611,7 +611,7 @@ plt.title("Cross-Dataset Full-Epoch PM2.5 Forecast: ML vs Deep Learning vs Hybri
 plt.ylabel("RMSE (ug/m3)")
 plt.xticks(rotation=45, ha="right")
 plt.tight_layout()
-plt.savefig("plots_cross_dataset/rmse_cross_dataset.png")
+plt.savefig("plots/rmse_cross_dataset.png")
 plt.close()
 
 plt.figure(figsize=(16, 7))
@@ -620,10 +620,10 @@ plt.title("Cross-Dataset Full-Epoch PM2.5 Forecast: ML vs Deep Learning vs Hybri
 plt.ylabel("R2 Score")
 plt.xticks(rotation=45, ha="right")
 plt.tight_layout()
-plt.savefig("plots_cross_dataset/r2_cross_dataset.png")
+plt.savefig("plots/r2_cross_dataset.png")
 plt.close()
 
-print("\nSaved models to 'models_cross_dataset/'")
-print("Saved metric tables to 'results_cross_dataset/'")
-print("Saved comparison plots to 'plots_cross_dataset/'")
+print("\nSaved models to 'models/'")
+print("Saved metric tables to 'results/'")
+print("Saved comparison plots to 'plots/'")
 print("✅ Full-epoch hybrid training & cross-dataset benchmark complete!")
