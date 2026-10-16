@@ -30,35 +30,38 @@ The framework implements a **dual-tier, cross-dataset validation paradigm**:
 
 ```mermaid
 graph TD
-    subgraph Data Sources
-        D1[Tier 1: 42 CPCB CAAQMS Stations<br/>Delhi, Mumbai, Kolkata, Chennai, Bengaluru<br/>1,586,340 Samples 2017-2023]
-        D2[Tier 2: Copernicus CAMS Reanalysis<br/>Same 5 Cities Centroids<br/>43,800 Samples Full-Year 2024]
+    subgraph S1["Data Sources"]
+        D1["Tier 1: 42 CPCB CAAQMS Stations<br/>Delhi, Mumbai, Kolkata, Chennai, Bengaluru<br/>1,586,340 Samples (2017-2023)"]
+        D2["Tier 2: Copernicus CAMS Reanalysis<br/>Same 5 Cities Centroids<br/>43,800 Samples (Full-Year 2024)"]
     end
 
-    subgraph Feature Engineering
-        P1[Plausibility Filter: PM2.5 in 0-1000 ug/m3]
-        P2[Time Interpolation: Gap <= 6h]
-        P3[Cyclical Encodings: Hour, DayOfWeek, Month]
-        P4[Zero-Leakage Scaler: Fitted strictly on Tier-1]
+    subgraph S2["Feature Engineering"]
+        P1["Plausibility Filter: PM2.5 in 0-1000 ug/m3"]
+        P2["Time Interpolation: Gap &le; 6h"]
+        P3["Cyclical Encodings: Hour, DayOfWeek, Month"]
+        P4["Zero-Leakage Scaler: Fitted strictly on Tier-1"]
     end
 
-    subgraph Level-1 Base Learners
-        M1[GBDT / Tabular Splitters<br/>XGBoost GPU & LightGBM]
-        M2[Recurrent Deep Learning<br/>PyTorch CUDA GRU, LSTM, BiLSTM]
+    subgraph S3["Level-1 Base Learners"]
+        M1["GBDT / Tabular Splitters<br/>XGBoost GPU & LightGBM"]
+        M2["Recurrent Deep Learning<br/>PyTorch CUDA GRU, LSTM, BiLSTM"]
     end
 
-    subgraph Meta-Learner Integration
-        EN[Optimal Stacking Meta-Learner<br/>y_hat = 0.34 * y_XGB + 0.66 * y_GRU]
+    subgraph S4["Meta-Learner Integration"]
+        EN["Optimal Stacking Meta-Learner<br/>y_hat = 0.34 * y_XGB + 0.66 * y_GRU"]
     end
 
-    subgraph Evaluation
-        EV[Zero-Leakage Cross-Dataset Evaluation<br/>R2 = 0.9752 | RMSE = 5.51 ug/m3]
+    subgraph S5["Evaluation"]
+        EV["Zero-Leakage Cross-Dataset Evaluation<br/>R2 = 0.9752, RMSE = 5.51 ug/m3"]
     end
 
-    D1 --> P1 --> P2 --> P3 --> P4
+    D1 --> P1
+    P1 --> P2
+    P2 --> P3
+    P3 --> P4
     D2 --> P4
-    P4 -->|Flattened vec| M1
-    P4 -->|Sequential 3D Tensor| M2
+    P4 --> M1
+    P4 --> M2
     M1 --> EN
     M2 --> EN
     EN --> EV
@@ -69,29 +72,64 @@ graph TD
 ## 📐 Mathematical Formulation
 
 ### 1. Sliding Lookback Sequence Construction
+
 Given historical observations up to timestamp $t$ with lookback horizon $T = 24$ hours:
-$$X_t = \begin{bmatrix} x_{t-23} \\ x_{t-22} \\ \vdots \\ x_t \end{bmatrix} \in \mathbb{R}^{24 \times 7}$$
+
+$$
+X_t = \begin{bmatrix} x_{t-23} \\ x_{t-22} \\ \vdots \\ x_t \end{bmatrix} \in \mathbb{R}^{24 \times 7}
+$$
 
 where the target is the scalar concentration at the next hour:
-$$y_t = \text{PM}_{2.5}(t+1) \in \mathbb{R}$$
+
+$$
+y_t = \text{PM}_{2.5}(t+1) \in \mathbb{R}
+$$
 
 ### 2. Cyclical Continuous Feature Transformations
+
 To prevent artificial discontinuity between periodic boundaries (e.g., hour 23 to 0 or month 12 to 1), continuous trigonometric projections are computed:
-$$\mathbf{h}_\tau = \left[ \sin\left(\frac{2\pi \cdot h_\tau}{24}\right),\, \cos\left(\frac{2\pi \cdot h_\tau}{24}\right) \right]$$
-$$\mathbf{d}_\tau = \left[ \sin\left(\frac{2\pi \cdot d_\tau}{7}\right),\, \cos\left(\frac{2\pi \cdot d_\tau}{7}\right) \right]$$
-$$\mathbf{m}_\tau = \left[ \sin\left(\frac{2\pi \cdot (m_\tau - 1)}{12}\right),\, \cos\left(\frac{2\pi \cdot (m_\tau - 1)}{12}\right) \right]$$
-$$x_\tau = \left[ \text{PM}_{2.5}(\tau),\, \mathbf{h}_\tau,\, \mathbf{d}_\tau,\, \mathbf{m}_\tau \right]^\top \in \mathbb{R}^7$$
+
+$$
+\mathbf{h}_\tau = \left[ \sin\left(\frac{2\pi \cdot h_\tau}{24}\right),\, \cos\left(\frac{2\pi \cdot h_\tau}{24}\right) \right]
+$$
+
+$$
+\mathbf{d}_\tau = \left[ \sin\left(\frac{2\pi \cdot d_\tau}{7}\right),\, \cos\left(\frac{2\pi \cdot d_\tau}{7}\right) \right]
+$$
+
+$$
+\mathbf{m}_\tau = \left[ \sin\left(\frac{2\pi \cdot (m_\tau - 1)}{12}\right),\, \cos\left(\frac{2\pi \cdot (m_\tau - 1)}{12}\right) \right]
+$$
+
+$$
+x_\tau = \left[ \text{PM}_{2.5}(\tau),\, \mathbf{h}_\tau,\, \mathbf{d}_\tau,\, \mathbf{m}_\tau \right]^\top \in \mathbb{R}^7
+$$
 
 ### 3. Strict Zero-Leakage Normalization
+
 Standardization parameters are estimated strictly on the Tier-1 Ground CAAQMS training distribution:
-$$\mu_{\text{train}} = \frac{1}{N_{\text{train}}} \sum_{i=1}^{N_{\text{train}}} x_i, \quad \sigma_{\text{train}} = \sqrt{\frac{1}{N_{\text{train}}} \sum_{i=1}^{N_{\text{train}}} (x_i - \mu_{\text{train}})^2}$$
-$$z = \frac{x - \mu_{\text{train}}}{\sigma_{\text{train}}}$$
+
+$$
+\mu_{\text{train}} = \frac{1}{N_{\text{train}}} \sum_{i=1}^{N_{\text{train}}} x_i, \quad \sigma_{\text{train}} = \sqrt{\frac{1}{N_{\text{train}}} \sum_{i=1}^{N_{\text{train}}} (x_i - \mu_{\text{train}})^2}
+$$
+
+$$
+z = \frac{x - \mu_{\text{train}}}{\sigma_{\text{train}}}
+$$
+
 The Tier-2 external evaluation dataset is normalized using $\mu_{\text{train}}$ and $\sigma_{\text{train}}$ with zero refitting, guaranteeing complete absence of test-set data leakage.
 
 ### 4. Meta-Learner Stacking Optimization
+
 The meta-learner identifies the optimal convex combination weight $\alpha^* \in [0, 1]$ on validation set $D_{\text{val}}$:
-$$\alpha^* = \arg\min_{\alpha \in [0, 1]} \frac{1}{|D_{\text{val}}|} \sum_{k \in D_{\text{val}}} \left( y_k - \left[ \alpha \cdot \hat{y}_{k, \text{ML}} + (1 - \alpha) \cdot \hat{y}_{k, \text{DL}} \right] \right)^2$$
-$$\hat{y}_{\text{Hybrid}} = \alpha^* \cdot \hat{y}_{\text{ML}} + (1 - \alpha^*) \cdot \hat{y}_{\text{DL}}$$
+
+$$
+\alpha^* = \arg\min_{\alpha \in [0, 1]} \frac{1}{|D_{\text{val}}|} \sum_{k \in D_{\text{val}}} \left( y_k - \left[ \alpha \cdot \hat{y}_{k, \text{ML}} + (1 - \alpha) \cdot \hat{y}_{k, \text{DL}} \right] \right)^2
+$$
+
+$$
+\hat{y}_{\text{Hybrid}} = \alpha^* \cdot \hat{y}_{\text{ML}} + (1 - \alpha^*) \cdot \hat{y}_{\text{DL}}
+$$
 
 ---
 
