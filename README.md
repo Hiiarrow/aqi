@@ -100,12 +100,44 @@ Evaluated across **389,974 test instances** in unseen test cities (**Bengaluru &
 
 ---
 
-## ⚙️ Installation & Execution
+## 🏆 Cross-Dataset Inter-Source Benchmark & Hybrid ML+DL Ensembles
+
+A dedicated multi-city cross-dataset pipeline ([`cross_dataset_5cities.py`](cross_dataset_5cities.py)) evaluates zero-leakage generalizability:
+- **Tier 1 (Training)**: Historical CPCB CAAQMS ground stations (**Delhi, Mumbai, Kolkata, Chennai, Bengaluru**) totaling **1,586,340 samples**.
+- **Tier 2 (Testing)**: Independent **Copernicus Atmosphere Monitoring Service (CAMS) 2024 satellite reanalysis** for the exact same 5 cities (**43,800 samples**).
+
+### Leaderboard on External 2024 CAMS Dataset
+
+| Rank | Model Architecture | Paradigm | MAE ($\mu g/m^3$) | RMSE ($\mu g/m^3$) | $R^2$ Score | MAPE (%) |
+| :---: | :--- | :---: | :---: | :---: | :---: | :---: |
+| 🥇 | **Hybrid (0.34\*XGBoost + 0.66\*GRU)** | **Hybrid (ML + DL)** | **3.69** | **5.51** | **0.9752** | **15.88%** |
+| 🥈 | **LightGBM** | Machine Learning / GBDT | 3.65 | 5.52 | 0.9752 | 16.40% |
+| 🥉 | **Hybrid: XGBoost + GRU (50/50)** | **Hybrid (ML + DL)** | **3.67** | **5.54** | **0.9750** | **16.27%** |
+| 4 | **GRU** | Deep Learning (PyTorch CUDA) | 3.83 | 5.59 | 0.9746 | 15.71% |
+| 5 | **Hybrid: LightGBM + LSTM (50/50)** | **Hybrid (ML + DL)** | **4.04** | **5.73** | **0.9732** | **18.78%** |
+| 6 | **Linear Regression** | Machine Learning (OLS) | 3.82 | 5.78 | 0.9728 | 15.52% |
+| 7 | **BiLSTM** | Deep Learning (PyTorch CUDA) | 4.07 | 5.86 | 0.9720 | 19.53% |
+| 8 | **XGBoost** | Machine Learning (GPU CUDA) | 3.79 | 5.87 | 0.9719 | 18.73% |
+| 9 | **Random Forest** | Machine Learning (Ensemble) | 3.67 | 5.92 | 0.9714 | 17.51% |
+| 10 | **Stacked LSTM** | Deep Learning (PyTorch CUDA) | 3.97 | 5.93 | 0.9713 | 14.99% |
+| 11 | **LSTM** | Deep Learning (PyTorch CUDA) | 4.54 | 6.15 | 0.9692 | 21.53% |
+| 12 | **Hybrid: LightGBM + CNN-LSTM** | **Hybrid (ML + DL)** | 5.30 | 6.81 | 0.9622 | 29.20% |
+| 13 | **Hybrid: Ridge + BiLSTM** | **Hybrid (ML + DL)** | 4.49 | 7.73 | 0.9513 | 20.63% |
+| 14 | **CNN-LSTM** | Deep Learning (PyTorch CUDA) | 7.32 | 8.82 | 0.9366 | 43.10% |
+| 15 | **Ridge Regression** | Machine Learning ($L_2$ linear) | 5.32 | 12.08 | 0.8810 | 23.67% |
+
+---
+
+## ⚙️ Execution Commands
 
 ```bash
-# Evaluate extended classification & F1 score benchmarks:
+# Run Cross-Dataset Hybrid Benchmark (5 Cities, In-Situ vs CAMS 2024):
+python cross_dataset_5cities.py
+
+# Evaluate extended classification & F1 score benchmarks on unseen cities:
 python evaluate_extended_benchmarks.py
 
-# Run complete benchmark pipeline:
+# Run complete cross-city benchmark pipeline:
 python cross_city_air_quality_prediction.py all
 ```
+
